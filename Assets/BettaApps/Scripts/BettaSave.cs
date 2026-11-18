@@ -16,6 +16,8 @@ namespace Betta3D
         public float surface = 0.1f;        // water surface, as a fraction of the screen height from the top
         public int version = 2;
         public List<string> monitors = new List<string>();   // device names of the monitors to swim on (empty = main)
+        public bool activeAbove;            // the active window stays in front of the fish
+        public bool diagnostics;            // write betta_debug.txt next to the exe (for troubleshooting)
 
         public static string FilePath { get { return Path.Combine(Application.persistentDataPath, "betta_settings.json"); } }
 

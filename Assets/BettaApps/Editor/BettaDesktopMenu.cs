@@ -44,6 +44,7 @@ namespace Betta3D.EditorTools
 
             // a transparent, borderless, always-running window
             PlayerSettings.productName = "BettaDesktop";
+            PlayerSettings.bundleVersion = BettaDesktop.Version;   // shown in the exe's file properties
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.defaultIsNativeResolution = false;
             PlayerSettings.defaultScreenWidth = Mathf.Max(800, Display.main.systemWidth);

@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "com.sugimotojin.betta": {
-      "version": "file:com.sugimotojin.betta",
+    "com.kyabe.betta": {
+      "version": "file:com.kyabe.betta",
       "depth": 0,
       "source": "embedded",
       "dependencies": {

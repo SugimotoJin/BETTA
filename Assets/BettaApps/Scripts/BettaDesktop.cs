@@ -12,6 +12,9 @@ namespace Betta3D
     /// </summary>
     public class BettaDesktop : MonoBehaviour
     {
+        /// <summary>App version: shown in the settings and the tray, and written into the exe when building.</summary>
+        public const string Version = "0.2.0";
+
         public Shader bodyShader, finShader, eyeShader, foodShader;
 
         const float FOV = 25f;
@@ -39,6 +42,8 @@ namespace Betta3D
         float refH = 1080f;       // pixel height the fish size is based on (tallest chosen monitor)
         readonly List<Vector3> floorSegs = new List<Vector3>();
         float diagTimer = 3f;
+        bool startupOn;
+        float startupCheck;
 
         void Awake()
         {
@@ -223,6 +228,8 @@ namespace Betta3D
                 case BettaWindow.CmdFeed: feeding = true; feedIdle = 0f; break;
                 case BettaWindow.CmdAdd: AddRandom(); break;
                 case BettaWindow.CmdMouse: save.mouseReact = !save.mouseReact; dirty = true; break;
+                case BettaWindow.CmdActiveAbove: save.activeAbove = !save.activeAbove; dirty = true; break;
+                case BettaWindow.CmdStartup: BettaWindow.SetStartup(!BettaWindow.StartupEnabled()); break;
                 case BettaWindow.CmdQuit: Quit(); break;
             }
         }
@@ -244,6 +251,8 @@ namespace Betta3D
             if (cmd != 0) { BettaWindow.PendingCommand = 0; Command(cmd); }
             BettaWindow.SettingsOpen = settingsOpen;
             BettaWindow.MouseReact = save.mouseReact;
+            BettaWindow.SetActiveAbove(save.activeAbove);
+            BettaWindow.UpdateZOrder(Time.unscaledDeltaTime);
 
             UpdateTank();
             for (int i = 0; i < fishes.Count; i++) fishes[i].bounds = tank;
@@ -275,7 +284,8 @@ namespace Betta3D
             if (diagTimer > 0f)
             {
                 diagTimer -= Time.deltaTime;
-                if (diagTimer <= 0f) WriteDiagnostics();
+                // only for troubleshooting: start the exe with -bettadebug
+                if (diagTimer <= 0f && (save.diagnostics || System.Environment.CommandLine.Contains("-bettadebug"))) WriteDiagnostics();
             }
 
             // ---- autosave a little after changes
@@ -352,13 +362,21 @@ namespace Betta3D
             GUILayout.BeginArea(area, GUI.skin.box);
             scroll = GUILayout.BeginScrollView(scroll);
 
-            GUILayout.Label("ベタの設定");
+            GUILayout.Label("ベタの設定（v" + Version + "）");
             float fs = BettaParamsGUI.Slider("画面での大きさ", save.fishScale, 0.25f, 1.5f, "0.00");
             if (fs != save.fishScale) { save.fishScale = fs; dirty = true; }
             float sf = BettaParamsGUI.Slider("水面の高さ", save.surface, 0f, 0.3f, "0.00");
             if (sf != save.surface) { save.surface = sf; dirty = true; }
             bool mr = GUILayout.Toggle(save.mouseReact, " マウスに反応する（寄ってくる・ついてくる）");
             if (mr != save.mouseReact) { save.mouseReact = mr; dirty = true; }
+            bool aa = GUILayout.Toggle(save.activeAbove, " アクティブなウィンドウをベタより前に出す");
+            if (aa != save.activeAbove) { save.activeAbove = aa; dirty = true; }
+            if (BettaWindow.Active)
+            {
+                if (Time.unscaledTime > startupCheck) { startupOn = BettaWindow.StartupEnabled(); startupCheck = Time.unscaledTime + 1f; }
+                bool nst = GUILayout.Toggle(startupOn, " Windowsの起動時に自動で起動する");
+                if (nst != startupOn) { BettaWindow.SetStartup(nst); startupOn = BettaWindow.StartupEnabled(); }
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label("なめらかさ", GUILayout.Width(80));
             int fpsIdx = save.fps >= 60 ? 1 : 0;

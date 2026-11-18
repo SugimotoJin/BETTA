@@ -21,7 +21,7 @@ namespace Betta3D
 
     public static class BettaWindow
     {
-        public const int CmdSettings = 1, CmdFeed = 2, CmdAdd = 3, CmdMouse = 4, CmdQuit = 5;
+        public const int CmdSettings = 1, CmdFeed = 2, CmdAdd = 3, CmdMouse = 4, CmdQuit = 5, CmdActiveAbove = 6, CmdStartup = 7;
 
         /// <summary>The overlay window is set up (player build on Windows).</summary>
         public static bool Active { get; private set; }
@@ -97,6 +97,18 @@ namespace Betta3D
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr hMon, ref MONITORINFOEX info);
         [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr ctx);
         [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+
+        // registry (start with Windows)
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern int RegOpenKeyEx(UIntPtr hKey, string subKey, int options, int sam, out IntPtr result);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern int RegSetValueEx(IntPtr hKey, string name, int reserved, int type, string data, int cbData);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern int RegQueryValueEx(IntPtr hKey, string name, IntPtr reserved, out int type, StringBuilder data, ref int cbData);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern int RegDeleteValue(IntPtr hKey, string name);
+        [DllImport("advapi32.dll")] static extern int RegCloseKey(IntPtr hKey);
+        static readonly UIntPtr HKEY_CURRENT_USER = new UIntPtr(0x80000001u);
+        const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        const string RunName = "BettaDesktop";
+        const int KEY_READ = 0x20019, KEY_WRITE = 0x20006, REG_SZ = 1;
 
         static readonly System.Collections.Generic.List<BettaMonitor> monitorList = new System.Collections.Generic.List<BettaMonitor>();
         [AOT.MonoPInvokeCallback(typeof(MonitorEnumProc))]
@@ -140,7 +152,15 @@ namespace Betta3D
         const long WS_POPUP = 0x80000000L, WS_VISIBLE = 0x10000000L;
         const long WS_EX_LAYERED = 0x80000, WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_TOPMOST = 0x8;
         const uint SWP_FRAMECHANGED = 0x20, SWP_SHOWWINDOW = 0x40, SWP_NOMOVE = 0x2, SWP_NOSIZE = 0x1, SWP_NOACTIVATE = 0x10;
-        static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        static readonly IntPtr HWND_TOPMOST = new IntPtr(-1), HWND_NOTOPMOST = new IntPtr(-2), HWND_TOP = IntPtr.Zero;
+        const uint SWP_NOZORDER = 0x4;
+
+        // "active window in front": the overlay sits just below the foreground window instead of on top of everything
+        static bool activeAbove, zDirty = true;
+        static IntPtr lastFg;
+        static float zTimer;
+        static IntPtr ZInsert { get { return activeAbove ? IntPtr.Zero : HWND_TOPMOST; } }
+        static uint ZFlag { get { return activeAbove ? SWP_NOZORDER : 0u; } }
         const uint WM_NULL = 0, WM_APP = 0x8000, WM_TRAY = WM_APP + 77;
         const int WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205;
         const uint MF_STRING = 0, MF_CHECKED = 8, MF_SEPARATOR = 0x800;
@@ -191,9 +211,13 @@ namespace Betta3D
             oldProc = SetWindowLongPtr(hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(procDelegate));
             AddTrayIcon();
             Active = true;
+            FixStartupPath();
+            ApplyExStyle();
+            zDirty = true;
             // Unity may have clamped the size to one monitor: set it once more now that the window is a popup
             yield return null;
-            SetWindowPos(hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_NOACTIVATE);
+            SetWindowPos(hwnd, ZInsert, winX, winY, winW, winH, SWP_NOACTIVATE | ZFlag);
+            zDirty = true;
         }
 
         /// <summary>Move / resize the overlay to cover another area (after choosing other monitors).</summary>
@@ -208,7 +232,8 @@ namespace Betta3D
             // changing the resolution makes Unity rebuild its window: make it a see-through overlay again
             ApplyOverlayStyle();
             yield return null;
-            SetWindowPos(hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_NOACTIVATE);
+            SetWindowPos(hwnd, ZInsert, winX, winY, winW, winH, SWP_NOACTIVATE | ZFlag);
+            zDirty = true;
         }
 
         static void ApplyOverlayStyle()
@@ -217,7 +242,8 @@ namespace Betta3D
             ApplyExStyle();
             MARGINS m = new MARGINS { left = -1, right = -1, top = -1, bottom = -1 };
             DwmExtendFrameIntoClientArea(hwnd, ref m);
-            SetWindowPos(hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+            SetWindowPos(hwnd, ZInsert, winX, winY, winW, winH, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE | ZFlag);
+            zDirty = true;
         }
 
         /// <summary>Where the window actually is (for the diagnostics file).</summary>
@@ -231,7 +257,7 @@ namespace Betta3D
 
         static void ApplyExStyle()
         {
-            long ex = WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+            long ex = WS_EX_LAYERED | WS_EX_TOOLWINDOW | (activeAbove ? 0 : WS_EX_TOPMOST);
             if (clickThrough) ex |= WS_EX_TRANSPARENT;
             SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
         }
@@ -242,7 +268,94 @@ namespace Betta3D
             if (!Active || on == clickThrough) return;
             clickThrough = on;
             ApplyExStyle();
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            SetWindowPos(hwnd, ZInsert, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | ZFlag);
+        }
+
+        /// <summary>on: the active window stays in front of the fish. off: the fish swim over everything.</summary>
+        public static void SetActiveAbove(bool on)
+        {
+            if (on == activeAbove) return;
+            activeAbove = on;
+            if (!Active) return;
+            ApplyExStyle();
+            zDirty = true;
+        }
+
+        public static bool ActiveAbove { get { return activeAbove; } }
+
+        /// <summary>Call every frame: keeps the overlay right below the foreground window (when that mode is on).</summary>
+        public static void UpdateZOrder(float dt)
+        {
+            if (!Active) return;
+            const uint keep = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+            if (!activeAbove)
+            {
+                if (zDirty) { SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, keep); zDirty = false; }
+                return;
+            }
+            zTimer -= dt;
+            IntPtr fg = GetForegroundWindow();
+            if (fg == lastFg && !zDirty && zTimer > 0f) return;
+            lastFg = fg; zDirty = false; zTimer = 0.5f;   // also re-check twice a second
+            SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, keep);
+            // our own window, the desktop or the taskbar active: stay above the other windows
+            IntPtr after = (fg == IntPtr.Zero || fg == hwnd || IsShell(fg)) ? HWND_TOP : fg;
+            SetWindowPos(hwnd, after, 0, 0, 0, 0, keep);
+        }
+
+        static bool IsShell(IntPtr h)
+        {
+            StringBuilder sb = new StringBuilder(64);
+            GetClassName(h, sb, 64);
+            string c = sb.ToString();
+            return c == "Progman" || c == "WorkerW" || c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd";
+        }
+
+        // ------------------------------------------------------------------ start with Windows
+        static string ExePath()
+        {
+            StringBuilder sb = new StringBuilder(1024);
+            GetModuleFileName(IntPtr.Zero, sb, sb.Capacity);
+            return sb.ToString();
+        }
+
+        static string ReadRun()
+        {
+            IntPtr k;
+            if (RegOpenKeyEx(HKEY_CURRENT_USER, RunKey, 0, KEY_READ, out k) != 0) return null;
+            try
+            {
+                int type, size = 2048;
+                StringBuilder sb = new StringBuilder(1024);
+                return RegQueryValueEx(k, RunName, IntPtr.Zero, out type, sb, ref size) == 0 ? sb.ToString() : null;
+            }
+            finally { RegCloseKey(k); }
+        }
+
+        /// <summary>Is the app registered to start when you sign in to Windows?</summary>
+        public static bool StartupEnabled() { return !string.IsNullOrEmpty(ReadRun()); }
+
+        public static void SetStartup(bool on)
+        {
+            IntPtr k;
+            if (RegOpenKeyEx(HKEY_CURRENT_USER, RunKey, 0, KEY_READ | KEY_WRITE, out k) != 0) return;
+            try
+            {
+                if (on)
+                {
+                    string v = "\"" + ExePath() + "\"";
+                    RegSetValueEx(k, RunName, 0, REG_SZ, v, (v.Length + 1) * 2);
+                }
+                else RegDeleteValue(k, RunName);
+            }
+            finally { RegCloseKey(k); }
+        }
+
+        /// <summary>If start-up is on but the exe was moved, point the entry at the current exe.</summary>
+        public static void FixStartupPath()
+        {
+            string v = ReadRun();
+            if (!string.IsNullOrEmpty(v) && v.Trim('"') != ExePath()) SetStartup(true);
         }
 
         /// <summary>Mouse position in Unity screen coordinates (origin bottom-left). false if off this screen.</summary>
@@ -266,7 +379,7 @@ namespace Betta3D
             d.uFlags = 1 | 2 | 4;   // NIF_MESSAGE | NIF_ICON | NIF_TIP
             d.uCallbackMessage = (int)WM_TRAY;
             d.hIcon = icon;
-            d.szTip = "ベタ（右クリックでメニュー）";
+            d.szTip = "ベタ v" + BettaDesktop.Version + "（右クリックでメニュー）";
             trayAdded = Shell_NotifyIcon(0, ref d);   // NIM_ADD
         }
 
@@ -300,6 +413,8 @@ namespace Betta3D
             AppendMenu(menu, MF_STRING, new UIntPtr((uint)CmdFeed), "エサをあげる");
             AppendMenu(menu, MF_STRING, new UIntPtr((uint)CmdAdd), "ベタを増やす（おまかせ）");
             AppendMenu(menu, MF_STRING | (MouseReact ? MF_CHECKED : 0), new UIntPtr((uint)CmdMouse), "マウスに反応する");
+            AppendMenu(menu, MF_STRING | (activeAbove ? MF_CHECKED : 0), new UIntPtr((uint)CmdActiveAbove), "アクティブなウィンドウを前に出す");
+            AppendMenu(menu, MF_STRING | (StartupEnabled() ? MF_CHECKED : 0), new UIntPtr((uint)CmdStartup), "Windowsの起動時に起動する");
             AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, null);
             AppendMenu(menu, MF_STRING, new UIntPtr((uint)CmdQuit), "終了");
             POINT pt;
@@ -332,6 +447,12 @@ namespace Betta3D
         public static IEnumerator Setup(RectInt area) { yield break; }
         public static IEnumerator Place(RectInt area) { yield break; }
         public static string Describe() { return "editor"; }
+        static bool activeAbove;
+        public static void SetActiveAbove(bool on) { activeAbove = on; }
+        public static bool ActiveAbove { get { return activeAbove; } }
+        public static void UpdateZOrder(float dt) { }
+        public static bool StartupEnabled() { return false; }
+        public static void SetStartup(bool on) { }
         public static BettaMonitor[] GetMonitors()
         {
             return new[] { new BettaMonitor { name = "editor", rect = new RectInt(0, 0, Screen.width, Screen.height), primary = true } };

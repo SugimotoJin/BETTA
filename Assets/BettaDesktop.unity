@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1930055915
+--- !u!1 &218358185
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1930055917}
-  - component: {fileID: 1930055916}
+  - component: {fileID: 218358187}
+  - component: {fileID: 218358186}
   m_Layer: 0
   m_Name: BettaDesktop
   m_TagString: Untagged
@@ -136,13 +136,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1930055916
+--- !u!114 &218358186
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1930055915}
+  m_GameObject: {fileID: 218358185}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0dee716b05990a740bbd8e0f8d8c4e1c, type: 3}
@@ -152,13 +152,13 @@ MonoBehaviour:
   finShader: {fileID: 4800000, guid: b957fde989d12bd4eb86c5db543d7a5f, type: 3}
   eyeShader: {fileID: 4800000, guid: 4be504d261f62624ea4f06f30421a345, type: 3}
   foodShader: {fileID: 4800000, guid: e0446c669fe9b134a977cbf7aeaed9a4, type: 3}
---- !u!4 &1930055917
+--- !u!4 &218358187
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1930055915}
+  m_GameObject: {fileID: 218358185}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -171,4 +171,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1930055917}
+  - {fileID: 218358187}
