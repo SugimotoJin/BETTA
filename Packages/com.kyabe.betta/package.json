@@ -1,0 +1,33 @@
+{
+  "name": "com.kyabe.betta",
+  "version": "0.1.0",
+  "displayName": "Betta Generator",
+  "description": "ベタ（闘魚）を色・形・模様のパラメーターから自動生成し、柔らかいヒレの物理と本物らしい泳ぎで動かします。プリセット（アセット）として保存して、どのシーン・作品でも使い回せます。URP 用。",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "17.3.0"
+  },
+  "keywords": [
+    "fish",
+    "betta",
+    "procedural",
+    "aquarium"
+  ],
+  "author": {
+    "name": "Kyabe",
+    "url": "https://github.com/SugimotoJin"
+  },
+  "samples": [
+    {
+      "displayName": "Demo",
+      "description": "色や形をその場で変えながら眺めるデモ（メニュー: Betta → デモシーンを作って開く）",
+      "path": "Samples~/Demo"
+    },
+    {
+      "displayName": "Desktop App (Windows)",
+      "description": "デスクトップの上をベタが泳ぐ常駐アプリ（メニュー: Betta → デスクトップ版をビルド）",
+      "path": "Samples~/Desktop"
+    }
+  ],
+  "license": "MIT"
+}
