@@ -13,7 +13,7 @@ namespace Betta3D
     public class BettaDesktop : MonoBehaviour
     {
         /// <summary>App version: shown in the settings and the tray, and written into the exe when building.</summary>
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
 
         public Shader bodyShader, finShader, eyeShader, foodShader;
 

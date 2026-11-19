@@ -77,7 +77,7 @@ namespace Betta3D
         [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] static extern IntPtr LoadIcon(IntPtr inst, IntPtr name);
         [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern IntPtr ExtractIcon(IntPtr inst, string file, uint index);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern uint ExtractIconEx(string file, int index, IntPtr[] large, IntPtr[] small, uint count);
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool Shell_NotifyIcon(int msg, ref NOTIFYICONDATA data);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetModuleFileName(IntPtr module, StringBuilder buf, int size);
         [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS m);
@@ -372,8 +372,10 @@ namespace Betta3D
         {
             StringBuilder sb = new StringBuilder(1024);
             GetModuleFileName(IntPtr.Zero, sb, sb.Capacity);
-            icon = ExtractIcon(IntPtr.Zero, sb.ToString(), 0);
-            iconOwned = icon != IntPtr.Zero && icon.ToInt64() != 1;
+            // the small icon (tray size, 16px at 100%) is sharper than shrinking the large one
+            IntPtr[] small = new IntPtr[1];
+            icon = ExtractIconEx(sb.ToString(), 0, null, small, 1) > 0 ? small[0] : IntPtr.Zero;
+            iconOwned = icon != IntPtr.Zero;
             if (!iconOwned) icon = LoadIcon(IntPtr.Zero, new IntPtr(32512));   // IDI_APPLICATION
             NOTIFYICONDATA d = NewData();
             d.uFlags = 1 | 2 | 4;   // NIF_MESSAGE | NIF_ICON | NIF_TIP
